@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+__version__ = "0.1.0"
+
 
 @dataclass
 class LintIssue:
@@ -34,8 +36,24 @@ class LintResult:
         return [i for i in self.issues if i.severity == "warning"]
 
     @property
+    def infos(self) -> list[LintIssue]:
+        return [i for i in self.issues if i.severity == "info"]
+
+    @property
     def ok(self) -> bool:
         return len(self.errors) == 0
+
+    def __bool__(self) -> bool:
+        """A result is truthy when it is ``ok`` (no errors)."""
+        return self.ok
+
+    def summary(self) -> str:
+        """Return a one-line, human-readable summary of the result."""
+        return (
+            f"{len(self.errors)} error(s), "
+            f"{len(self.warnings)} warning(s), "
+            f"{len(self.infos)} info(s)"
+        )
 
 
 class PromptLinter:
@@ -149,23 +167,53 @@ class PromptLinter:
         return self.add("no_duplicate_instructions", rule)
 
     def add_no_forbidden_words(
-        self, words: list[str], severity: str = "error", name: str = "no_forbidden"
+        self,
+        words: list[str],
+        severity: str = "error",
+        name: str = "no_forbidden",
+        whole_word: bool = False,
     ) -> "PromptLinter":
-        """Flag prompts containing forbidden words."""
+        """Flag prompts containing forbidden words.
+
+        Matching is case-insensitive. By default a forbidden term is matched as
+        a substring (``"ignore"`` also matches inside ``"ignored"``). Pass
+        ``whole_word=True`` to match only on word boundaries, which avoids
+        false positives such as ``"ass"`` matching inside ``"assistant"``.
+        """
         lwords = [w.lower() for w in words]
 
-        def rule(text: str) -> list[LintIssue]:
-            text_lower = text.lower()
-            found = [w for w in lwords if w in text_lower]
-            if found:
-                return [
-                    LintIssue(
-                        rule=name,
-                        severity=severity,
-                        message=f"Forbidden word(s) found: {found}",
-                    )
-                ]
-            return []
+        if whole_word:
+            patterns = [
+                (w, re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE))
+                for w in lwords
+            ]
+
+            def rule(text: str) -> list[LintIssue]:
+                found = [w for w, pat in patterns if pat.search(text)]
+                if found:
+                    return [
+                        LintIssue(
+                            rule=name,
+                            severity=severity,
+                            message=f"Forbidden word(s) found: {found}",
+                        )
+                    ]
+                return []
+
+        else:
+
+            def rule(text: str) -> list[LintIssue]:
+                text_lower = text.lower()
+                found = [w for w in lwords if w in text_lower]
+                if found:
+                    return [
+                        LintIssue(
+                            rule=name,
+                            severity=severity,
+                            message=f"Forbidden word(s) found: {found}",
+                        )
+                    ]
+                return []
 
         return self.add(name, rule)
 
@@ -189,6 +237,22 @@ class PromptLinter:
             return []
 
         return self.add("language_check", rule)
+
+    def add_not_empty(self, severity: str = "error") -> "PromptLinter":
+        """Flag prompts that are empty or contain only whitespace."""
+
+        def rule(text: str) -> list[LintIssue]:
+            if not text.strip():
+                return [
+                    LintIssue(
+                        rule="not_empty",
+                        severity=severity,
+                        message="Prompt is empty or whitespace-only.",
+                    )
+                ]
+            return []
+
+        return self.add("not_empty", rule)
 
     def add_require_word(self, word: str, severity: str = "warning") -> "PromptLinter":
         """Require a specific word or phrase to appear in the prompt."""
@@ -219,4 +283,4 @@ class PromptLinter:
         return [name for name, _ in self._rules]
 
 
-__all__ = ["PromptLinter", "LintIssue", "LintResult"]
+__all__ = ["PromptLinter", "LintIssue", "LintResult", "__version__"]

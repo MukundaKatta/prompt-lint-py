@@ -20,5 +20,11 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/MukundaKatta/prompt-lint-py"
 
+[project.scripts]
+prompt-lint = "prompt_lint.__main__:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+prompt_lint = ["py.typed"]
