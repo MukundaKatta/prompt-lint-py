@@ -1,6 +1,6 @@
 """Tests for prompt-lint-py."""
-import pytest
-from prompt_lint import PromptLinter, LintIssue, LintResult
+
+from prompt_lint import LintIssue, PromptLinter
 
 
 def test_empty_rules_pass():
@@ -156,3 +156,38 @@ def test_lint_issue_fields():
     assert issue.severity == "error"
     assert issue.message == "Something wrong"
     assert issue.line is None
+
+
+def test_passed_false_on_warning_but_ok_true():
+    # ok == no errors (warnings allowed); passed == no errors AND no warnings.
+    linter = PromptLinter()
+    linter.add_max_length(max_chars=5, severity="warning")
+    result = linter.lint("this is too long")
+    assert len(result.warnings) == 1
+    assert result.ok is True
+    assert result.passed is False
+
+
+def test_passed_false_on_error():
+    linter = PromptLinter()
+    linter.add_max_length(max_chars=5, severity="error")
+    result = linter.lint("this is too long")
+    assert result.ok is False
+    assert result.passed is False
+
+
+def test_language_check_flags_mixed_content():
+    linter = PromptLinter()
+    linter.add_language_check(severity="info")
+    result = linter.lint("Hello café résumé naïve")
+    assert any(i.rule == "language_check" for i in result.issues)
+    # info-only issues are neither errors nor warnings.
+    assert result.ok is True
+    assert result.passed is True
+
+
+def test_language_check_ascii_only_passes():
+    linter = PromptLinter()
+    linter.add_language_check(severity="info")
+    result = linter.lint("You are a helpful assistant.")
+    assert result.issues == []

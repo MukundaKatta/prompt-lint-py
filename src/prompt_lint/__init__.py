@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Callable
 
 
 @dataclass
@@ -12,7 +12,7 @@ class LintIssue:
     """A single lint finding."""
 
     rule: str
-    severity: str   # "error" | "warning" | "info"
+    severity: str  # "error" | "warning" | "info"
     message: str
     line: int | None = None
 
@@ -65,26 +65,40 @@ class PromptLinter:
         self._rules.append((name, rule))
         return self
 
-    def add_max_length(self, max_chars: int, severity: str = "warning") -> "PromptLinter":
+    def add_max_length(
+        self, max_chars: int, severity: str = "warning"
+    ) -> "PromptLinter":
         """Warn/error if the prompt exceeds max_chars."""
+
         def rule(text: str) -> list[LintIssue]:
             if len(text) > max_chars:
-                return [LintIssue(
-                    rule="max_length", severity=severity,
-                    message=f"Prompt is {len(text)} chars, exceeds max {max_chars}.",
-                )]
+                return [
+                    LintIssue(
+                        rule="max_length",
+                        severity=severity,
+                        message=f"Prompt is {len(text)} chars, exceeds max {max_chars}.",
+                    )
+                ]
             return []
+
         return self.add("max_length", rule)
 
-    def add_min_length(self, min_chars: int, severity: str = "warning") -> "PromptLinter":
+    def add_min_length(
+        self, min_chars: int, severity: str = "warning"
+    ) -> "PromptLinter":
         """Warn/error if the prompt is shorter than min_chars."""
+
         def rule(text: str) -> list[LintIssue]:
             if len(text) < min_chars:
-                return [LintIssue(
-                    rule="min_length", severity=severity,
-                    message=f"Prompt is only {len(text)} chars, minimum is {min_chars}.",
-                )]
+                return [
+                    LintIssue(
+                        rule="min_length",
+                        severity=severity,
+                        message=f"Prompt is only {len(text)} chars, minimum is {min_chars}.",
+                    )
+                ]
             return []
+
         return self.add("min_length", rule)
 
     def add_no_placeholder(
@@ -96,17 +110,22 @@ class PromptLinter:
         def rule(text: str) -> list[LintIssue]:
             found = compiled.findall(text)
             if found:
-                return [LintIssue(
-                    rule="no_placeholder", severity=severity,
-                    message=f"Unfilled placeholder(s) found: {found}",
-                )]
+                return [
+                    LintIssue(
+                        rule="no_placeholder",
+                        severity=severity,
+                        message=f"Unfilled placeholder(s) found: {found}",
+                    )
+                ]
             return []
+
         return self.add("no_placeholder", rule)
 
     def add_no_duplicate_instructions(
         self, min_similarity: int = 3, severity: str = "warning"
     ) -> "PromptLinter":
         """Flag repeated sentences or clauses (naive word-overlap heuristic)."""
+
         def rule(text: str) -> list[LintIssue]:
             sentences = [s.strip() for s in re.split(r"[.!?]", text) if s.strip()]
             seen: set[str] = set()
@@ -118,11 +137,15 @@ class PromptLinter:
                 else:
                     seen.add(normalized)
             if dupes:
-                return [LintIssue(
-                    rule="no_duplicate_instructions", severity=severity,
-                    message=f"Possible duplicate instruction(s): {dupes}",
-                )]
+                return [
+                    LintIssue(
+                        rule="no_duplicate_instructions",
+                        severity=severity,
+                        message=f"Possible duplicate instruction(s): {dupes}",
+                    )
+                ]
             return []
+
         return self.add("no_duplicate_instructions", rule)
 
     def add_no_forbidden_words(
@@ -135,15 +158,20 @@ class PromptLinter:
             text_lower = text.lower()
             found = [w for w in lwords if w in text_lower]
             if found:
-                return [LintIssue(
-                    rule=name, severity=severity,
-                    message=f"Forbidden word(s) found: {found}",
-                )]
+                return [
+                    LintIssue(
+                        rule=name,
+                        severity=severity,
+                        message=f"Forbidden word(s) found: {found}",
+                    )
+                ]
             return []
+
         return self.add(name, rule)
 
     def add_language_check(self, severity: str = "info") -> "PromptLinter":
         """Flag prompts that appear to mix multiple languages (simple heuristic)."""
+
         # Heuristic: detect non-ASCII characters at >10% of content
         def rule(text: str) -> list[LintIssue]:
             if not text:
@@ -151,24 +179,31 @@ class PromptLinter:
             non_ascii = sum(1 for c in text if ord(c) > 127)
             ratio = non_ascii / len(text)
             if 0 < ratio < 0.8:  # mixed content
-                return [LintIssue(
-                    rule="language_check", severity=severity,
-                    message=f"Prompt appears to mix languages ({ratio:.0%} non-ASCII).",
-                )]
+                return [
+                    LintIssue(
+                        rule="language_check",
+                        severity=severity,
+                        message=f"Prompt appears to mix languages ({ratio:.0%} non-ASCII).",
+                    )
+                ]
             return []
+
         return self.add("language_check", rule)
 
-    def add_require_word(
-        self, word: str, severity: str = "warning"
-    ) -> "PromptLinter":
+    def add_require_word(self, word: str, severity: str = "warning") -> "PromptLinter":
         """Require a specific word or phrase to appear in the prompt."""
+
         def rule(text: str) -> list[LintIssue]:
             if word.lower() not in text.lower():
-                return [LintIssue(
-                    rule=f"require_word:{word}", severity=severity,
-                    message=f"Required word '{word}' not found in prompt.",
-                )]
+                return [
+                    LintIssue(
+                        rule=f"require_word:{word}",
+                        severity=severity,
+                        message=f"Required word '{word}' not found in prompt.",
+                    )
+                ]
             return []
+
         return self.add(f"require_word:{word}", rule)
 
     def lint(self, text: str) -> LintResult:
@@ -176,7 +211,8 @@ class PromptLinter:
         all_issues: list[LintIssue] = []
         for _, rule in self._rules:
             all_issues.extend(rule(text))
-        passed = all(i.severity != "error" for i in all_issues)
+        # passed == no errors AND no warnings; ok (on LintResult) == no errors only.
+        passed = all(i.severity not in ("error", "warning") for i in all_issues)
         return LintResult(issues=all_issues, passed=passed, text=text)
 
     def rule_names(self) -> list[str]:
